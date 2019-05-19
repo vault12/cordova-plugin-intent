@@ -1,7 +1,15 @@
 package com.napolitano.cordova.plugin.intent;
 
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.reflect.Array;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Set;
 
@@ -15,6 +23,7 @@ import android.content.ClipData;
 import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.OpenableColumns;
 import android.util.Log;
 import android.net.Uri;
 
@@ -64,8 +73,8 @@ public class IntentPlugin extends CordovaPlugin {
      * @param data
      * @param context
      */
-    public boolean getCordovaIntent (final JSONArray data, final CallbackContext context) {
-        if(data.length() != 0) {
+    public boolean getCordovaIntent(final JSONArray data, final CallbackContext context) {
+        if (data.length() != 0) {
             context.sendPluginResult(new PluginResult(PluginResult.Status.INVALID_ACTION));
             return false;
         }
@@ -82,8 +91,8 @@ public class IntentPlugin extends CordovaPlugin {
      * @param context
      * @return
      */
-    public boolean setNewIntentHandler (final JSONArray data, final CallbackContext context) {
-        if(data.length() != 1) {
+    public boolean setNewIntentHandler(final JSONArray data, final CallbackContext context) {
+        if (data.length() != 1) {
             context.sendPluginResult(new PluginResult(PluginResult.Status.INVALID_ACTION));
             return false;
         }
@@ -126,7 +135,7 @@ public class IntentPlugin extends CordovaPlugin {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
             clipData = intent.getClipData();
-            if(clipData != null) {
+            if (clipData != null) {
                 int clipItemCount = clipData.getItemCount();
                 items = new JSONObject[clipItemCount];
 
@@ -141,7 +150,7 @@ public class IntentPlugin extends CordovaPlugin {
                         items[i].put("text", item.getText());
                         items[i].put("uri", item.getUri());
 
-                        if(item.getUri() != null) {
+                        if (item.getUri() != null) {
                             String type = cR.getType(item.getUri());
                             String extension = mime.getExtensionFromMimeType(cR.getType(item.getUri()));
 
@@ -163,7 +172,7 @@ public class IntentPlugin extends CordovaPlugin {
             intentJSON = new JSONObject();
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-                if(items != null) {
+                if (items != null) {
                     intentJSON.put("clipItems", new JSONArray(items));
                 }
             }
@@ -230,23 +239,35 @@ public class IntentPlugin extends CordovaPlugin {
             context.sendPluginResult(new PluginResult(PluginResult.Status.INVALID_ACTION));
             return false;
         }
-        ContentResolver cR = this.cordova.getActivity().getApplicationContext().getContentResolver();
-        Cursor cursor = null;
-        try {
-            String[] proj = { MediaStore.Images.Media.DATA };
-            cursor = cR.query(Uri.parse(data.getString(0)),  proj, null, null, null);
-            int column_index = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
-            cursor.moveToFirst();
-
-            context.sendPluginResult(new PluginResult(PluginResult.Status.OK, cursor.getString(column_index)));
-            return true;
-        } finally {
-            if (cursor != null) {
-                cursor.close();
-            }
-
-            context.sendPluginResult(new PluginResult(PluginResult.Status.INVALID_ACTION));
-            return false;
+        String contentUri = data.optString(0);
+        String filename = contentUri.substring(contentUri.lastIndexOf('/') + 1);
+        String tmpFilePath = cordova.getActivity().getCacheDir().getAbsolutePath()
+                + File.separator + filename;
+        File tmpFile = new File(tmpFilePath);
+        if (tmpFile.exists()) {
+            tmpFile.delete();
         }
+
+        Uri uri = Uri.parse(contentUri);
+        Cursor cursor = cordova.getActivity().getContentResolver().query(uri, null, null, null, null);
+        int nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+        cursor.moveToFirst();
+        try {
+            InputStream is = cordova.getActivity().getContentResolver().openInputStream(uri);
+            OutputStream os = new FileOutputStream(tmpFilePath);
+            byte[] buf = new byte[1024];
+            int len;
+            while((len=is.read(buf))>0){
+                os.write(buf,0,len);
+            }
+            os.close();
+            is.close();
+            context.sendPluginResult(new PluginResult(PluginResult.Status.OK, tmpFilePath));
+            return true;
+        } catch (IOException e) {
+            e.printStackTrace();
+            context.error(e.getLocalizedMessage());
+        }
+        return false;
     }
 }
