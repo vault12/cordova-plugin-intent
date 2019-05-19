@@ -1,5 +1,52 @@
 # Cordova Plugin for accessing the Cordova Intent and handling onNewIntent (Android Only)
 
+Fork of [https://github.com/napolitano/cordova-plugin-intent]().
+
+####Updates
+
+- Automated plugin installation - no need to modify AndroidManifest or config.xml manually
+- Due to recent Android file sharing restrictions, `getRealPathFromContentUrl` method is modified to copy incoming file to cache dir.
+
+####Quick start
+
+Install plugin, then add the following code to `onDeviceReady` handler:
+
+```js
+function processIntent(intent) {
+    if (intent.extras) {
+        let contentUrl = intent.extras["android.intent.extra.STREAM"];
+        if (contentUrl) {
+            window.plugins.intent.getRealPathFromContentUrl(
+                contentUrl,
+                function (realPath) {
+                    console.log("Incoming file saved at path: ", realPath);
+                },
+                function () {
+                    console.log('Error');
+                }
+            );
+        }
+    }
+}
+
+// get on-launch intent
+window.plugins.intent.getCordovaIntent(function (Intent) {
+    processIntent(Intent);
+}, function () {
+    console.log('Error');
+});
+
+// handle new incoming intents when app is running
+window.plugins.intent.setNewIntentHandler(function (Intent) {
+    processIntent(Intent);
+});
+```
+
+See below for more details.
+
+
+---
+
 __This plugin is not longer maintained.__
 
 This plugin allows you to add functionality for receiving content sent from other apps. To enable receiving sent content add the following XML to the MainActivity section of your AndroidManifest.xml
